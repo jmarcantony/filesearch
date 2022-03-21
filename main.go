@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,51 +12,67 @@ import (
 )
 
 var (
-    mu sync.Mutex
-    wg sync.WaitGroup
-    filesScanned, foldersScanned int
-    root = flag.String("r", "/", "root directory to start search")
-    verbose = flag.Bool("v", false, "show extra info")
+	mu             sync.Mutex
+	wg             sync.WaitGroup
+	foldersScanned int
+	root           = flag.String("r", "/", "root directory to start search")
+	verbose        = flag.Bool("v", false, "show extra info")
 )
 
+func binarySearch(f []fs.FileInfo, t string) bool {
+	l := len(f)
+	s := make([]string, l)
+	for i := 0; i < l; i++ {
+		s[i] = f[i].Name()
+	}
+	i, j := 0, l-1
+	for i <= j {
+		m := (i + j) / 2
+		if s[m] == t {
+			return true
+		} else if s[m] > t {
+			j = m - 1
+		} else {
+			i = m + 1
+		}
+	}
+	return false
+}
+
 func search(path, filename string) {
-    files, err := ioutil.ReadDir(path)
-    if err != nil {
-        if *verbose {
-            fmt.Printf("\u001b[31m[-] Cannot read %s, skipping...\u001b[0m\n", path)
-        }
-    }
-    for _, file := range files {
-        name := file.Name()
-        if name == filename {
-            fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, name))
-        }
-        if file.IsDir() {
-            mu.Lock()
-            foldersScanned++
-            mu.Unlock()
-            wg.Add(1)
-            go func() {
-                defer wg.Done()
-                search(filepath.Join(path, name), filename)
-            }()
-        } else {
-            mu.Lock()
-            filesScanned++
-            mu.Unlock()
-        }
-    }
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		if *verbose {
+			fmt.Printf("\u001b[31m[-] Cannot read %s, skipping...\u001b[0m\n", path)
+		}
+	}
+	if binarySearch(files, filename) {
+		fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, filename))
+	}
+	for _, file := range files {
+		if file.IsDir() {
+			p := filepath.Join(path, file.Name())
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				search(p, filename)
+				mu.Lock()
+				foldersScanned++
+				mu.Unlock()
+			}()
+		}
+	}
 }
 
 func main() {
-    flag.Parse()
-    filename := flag.Arg(0)
-    if filename == "" {
-        fmt.Fprintln(os.Stderr, "\u001b[31m[!] File not specified\u001b[0m")
-        os.Exit(1)
-    }
-    start := time.Now()
-    search(*root, filename)
-    wg.Wait()
-    fmt.Printf("\n\u001b[33m[*] %d files and %d folders searched in %v\u001b[0m\n", filesScanned, foldersScanned, time.Since(start))
+	flag.Parse()
+	filename := flag.Arg(0)
+	if filename == "" {
+		fmt.Fprintln(os.Stderr, "\u001b[31m[!] File not specified\u001b[0m")
+		os.Exit(1)
+	}
+	start := time.Now()
+	search(*root, filename)
+	wg.Wait()
+	fmt.Printf("\n\u001b[33m[*] %d folders searched in %v\u001b[0m\n", foldersScanned, time.Since(start))
 }
