@@ -88,7 +88,6 @@ func main() {
 		}
 		re = r
 	}
-	fmt.Println(*pattern)
 	if filename == "" && *pattern == "" {
 		fmt.Fprintln(os.Stderr, "\u001b[31m[!] File not specified\u001b[0m")
 		os.Exit(1)
