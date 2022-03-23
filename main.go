@@ -13,12 +13,12 @@ import (
 )
 
 var (
-	mu             sync.Mutex
-	wg             sync.WaitGroup
-	foldersScanned int
-	root           = flag.String("r", "/", "root directory to start search")
-	pattern        = flag.String("p", "", "regex pattern to search for")
-	verbose        = flag.Bool("v", false, "show extra info")
+	mu                         sync.Mutex
+	wg                         sync.WaitGroup
+	foldersScanned, filesFound int
+	root                       = flag.String("r", "/", "root directory to start search")
+	pattern                    = flag.String("p", "", "regex pattern to search for")
+	verbose                    = flag.Bool("v", false, "show extra info")
 )
 
 func binarySearch(s []fs.FileInfo, t string) bool {
@@ -47,6 +47,9 @@ func search(path, filename string, re *regexp.Regexp) {
 	if re == nil {
 		if binarySearch(files, filename) {
 			fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, filename))
+			mu.Lock()
+			filesFound++
+			mu.Unlock()
 		}
 	}
 	for _, file := range files {
@@ -54,15 +57,18 @@ func search(path, filename string, re *regexp.Regexp) {
 			name := file.Name()
 			if re.MatchString(name) {
 				fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, name))
+				mu.Lock()
+				filesFound++
+				mu.Unlock()
 			}
 		}
 		if file.IsDir() {
-			mu.Lock()
-			foldersScanned++
-			mu.Unlock()
 			p := filepath.Join(path, file.Name())
 			wg.Add(1)
 			go func() {
+				mu.Lock()
+				foldersScanned++
+				mu.Unlock()
 				defer wg.Done()
 				search(p, filename, re)
 			}()
@@ -90,5 +96,5 @@ func main() {
 	start := time.Now()
 	search(*root, filename, re)
 	wg.Wait()
-	fmt.Printf("\n\u001b[33m[*] %d folders searched in %v\u001b[0m\n", foldersScanned, time.Since(start))
+	fmt.Printf("\n\u001b[33m[*] %d Matches found, %d folders searched in %v\u001b[0m\n", filesFound, foldersScanned, time.Since(start))
 }
