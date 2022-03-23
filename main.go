@@ -19,18 +19,14 @@ var (
 	verbose        = flag.Bool("v", false, "show extra info")
 )
 
-func binarySearch(f []fs.FileInfo, t string) bool {
-	l := len(f)
-	s := make([]string, l)
-	for i := 0; i < l; i++ {
-		s[i] = f[i].Name()
-	}
-	i, j := 0, l-1
+func binarySearch(s []fs.FileInfo, t string) bool {
+	i, j := 0, len(s)-1
 	for i <= j {
 		m := (i + j) / 2
-		if s[m] == t {
+                n := s[m].Name()
+		if n == t {
 			return true
-		} else if s[m] > t {
+		} else if n > t {
 			j = m - 1
 		} else {
 			i = m + 1
@@ -51,14 +47,14 @@ func search(path, filename string) {
 	}
 	for _, file := range files {
 		if file.IsDir() {
+			mu.Lock()
+			foldersScanned++
+			mu.Unlock()
 			p := filepath.Join(path, file.Name())
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				search(p, filename)
-				mu.Lock()
-				foldersScanned++
-				mu.Unlock()
 			}()
 		}
 	}
