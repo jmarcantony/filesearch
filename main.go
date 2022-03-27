@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
@@ -17,6 +17,7 @@ var (
 	foldersScanned, filesFound int
 	mu                         sync.Mutex
 	wg                         sync.WaitGroup
+	red                        = color.New(color.FgRed)
 	root                       = flag.String("r", "/", "root directory to start search")
 	pattern                    = flag.String("p", "", "regex pattern to search for")
 	verbose                    = flag.Bool("v", false, "show extra info")
@@ -27,14 +28,16 @@ func search(path, filename string, re *regexp.Regexp) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		if *verbose {
-			fmt.Printf("\u001b[31m[-] Cannot read %s, skipping...\u001b[0m\n", path)
+			mu.Lock()
+			color.Red("[-] Cannot read %s, skipping...", path)
+			mu.Unlock()
 		}
 	}
 	for _, file := range files {
 		if *fuzz {
 			if fuzzy.Match(file.Name(), filename) {
-				fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, file.Name()))
 				mu.Lock()
+				color.Green("[+] Found File: %s", filepath.Join(path, file.Name()))
 				filesFound++
 				mu.Unlock()
 
@@ -43,14 +46,14 @@ func search(path, filename string, re *regexp.Regexp) {
 
 			if re != nil {
 				if re.MatchString(file.Name()) {
-					fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, file.Name()))
 					mu.Lock()
+					color.Green("[+] Found File: %s", filepath.Join(path, file.Name()))
 					filesFound++
 					mu.Unlock()
 				}
 			} else if file.Name() == filename {
-				fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, file.Name()))
 				mu.Lock()
+				color.Green("[+] Found File: %s", filepath.Join(path, file.Name()))
 				filesFound++
 				mu.Unlock()
 			}
@@ -76,17 +79,17 @@ func main() {
 	if *pattern != "" {
 		r, err := regexp.Compile(*pattern)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "\u001b[31m[!] Invalid regex\u001b[0m")
+			red.Fprintln(os.Stderr, "[!] Invalid regex")
 			os.Exit(1)
 		}
 		re = r
 	}
 	if filename == "" && *pattern == "" {
-		fmt.Fprintln(os.Stderr, "\u001b[31m[!] File not specified\u001b[0m")
+		red.Fprintln(os.Stderr, "[!] File not specified")
 		os.Exit(1)
 	}
 	start := time.Now()
 	search(*root, filename, re)
 	wg.Wait()
-	fmt.Printf("\n\u001b[33m[*] %d Matches found, %d folders searched in %v\u001b[0m\n", filesFound, foldersScanned, time.Since(start))
+	color.Yellow("\n[*] %d Matches found, %d folders searched in %v", filesFound, foldersScanned, time.Since(start))
 }
