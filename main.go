@@ -9,15 +9,18 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 var (
+	foldersScanned, filesFound int
 	mu                         sync.Mutex
 	wg                         sync.WaitGroup
-	foldersScanned, filesFound int
 	root                       = flag.String("r", "/", "root directory to start search")
 	pattern                    = flag.String("p", "", "regex pattern to search for")
 	verbose                    = flag.Bool("v", false, "show extra info")
+	fuzz                       = flag.Bool("f", false, "fuzzy search for filename")
 )
 
 func search(path, filename string, re *regexp.Regexp) {
@@ -28,18 +31,29 @@ func search(path, filename string, re *regexp.Regexp) {
 		}
 	}
 	for _, file := range files {
-		if re != nil {
-			if re.MatchString(file.Name()) {
+		if *fuzz {
+			if fuzzy.Match(file.Name(), filename) {
+				fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, file.Name()))
+				mu.Lock()
+				filesFound++
+				mu.Unlock()
+
+			}
+		} else {
+
+			if re != nil {
+				if re.MatchString(file.Name()) {
+					fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, file.Name()))
+					mu.Lock()
+					filesFound++
+					mu.Unlock()
+				}
+			} else if file.Name() == filename {
 				fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, file.Name()))
 				mu.Lock()
 				filesFound++
 				mu.Unlock()
 			}
-		} else if file.Name() == filename {
-			fmt.Printf("\u001b[32m[+] Found File: %s\u001b[0m\n", filepath.Join(path, file.Name()))
-			mu.Lock()
-			filesFound++
-			mu.Unlock()
 		}
 		if file.IsDir() {
 			p := filepath.Join(path, file.Name())
